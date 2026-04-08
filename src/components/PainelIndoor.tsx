@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CheckCircle, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { getPublicUrl } from "@/lib/supabase/storage";
 
 const features = [
   "Informativos para equipe interna",
@@ -12,16 +14,31 @@ const features = [
   "Integração com redes sociais",
 ];
 
-const partnerVideos = Array.from({ length: 9 }, (_, i) => `/videos/${i + 1}.mp4`);
-
 export default function PainelIndoor() {
+  const [videos, setVideos] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const goTo = useCallback((index: number) => {
-    setCurrent((index + partnerVideos.length) % partnerVideos.length);
+  useEffect(() => {
+    const fetchVideos = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("partner_videos")
+        .select("file_path")
+        .eq("active", true)
+        .order("sort_order");
+      if (data?.length) {
+        setVideos(data.map((v) => getPublicUrl(v.file_path)));
+      }
+    };
+    fetchVideos();
   }, []);
+
+  const goTo = useCallback((index: number) => {
+    if (videos.length === 0) return;
+    setCurrent((index + videos.length) % videos.length);
+  }, [videos.length]);
 
   // Auto-advance when video ends
   const handleEnded = useCallback(() => {
@@ -30,18 +47,20 @@ export default function PainelIndoor() {
 
   // Auto-advance fallback every 8s
   useEffect(() => {
+    if (videos.length === 0) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => goTo(current + 1), 8000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [current, goTo]);
+  }, [current, goTo, videos.length]);
 
   // Play new video when current changes
   useEffect(() => {
+    if (videos.length === 0) return;
     if (videoRef.current) {
       videoRef.current.load();
       videoRef.current.play().catch(() => {});
     }
-  }, [current]);
+  }, [current, videos]);
 
   return (
     <section className="py-24 gradient-dark relative overflow-hidden">
@@ -97,7 +116,7 @@ export default function PainelIndoor() {
                   playsInline
                   onEnded={handleEnded}
                 >
-                  <source src={partnerVideos[current]} type="video/mp4" />
+                  <source src={videos[current]} type="video/mp4" />
                 </video>
               </div>
 
@@ -122,7 +141,7 @@ export default function PainelIndoor() {
 
                 {/* Dots */}
                 <div className="flex gap-1.5">
-                  {partnerVideos.map((_, i) => (
+                  {videos.map((_, i) => (
                     <button
                       key={i}
                       onClick={() => goTo(i)}

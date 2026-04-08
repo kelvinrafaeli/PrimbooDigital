@@ -1,25 +1,53 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { MapPin, ExternalLink } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { getPublicUrl } from "@/lib/supabase/storage";
 
-const locations = [
-  { name: "Barbearia El Toro", address: "Av. Rio Branco", query: "Barbearia El Toro, Av. Rio Branco, Caxias do Sul, RS" },
-  { name: "Soul Cachos", address: "R. Os Dezoito do Forte", query: "Soul Cachos, R. Os Dezoito do Forte, Caxias do Sul, RS" },
-  { name: "Estética e Boutique Dhes", address: "Av. Rio Branco (Vitrine)", query: "Estética e Boutique Dhes, Av. Rio Branco, Caxias do Sul, RS" },
-  { name: "Restaurante Vó Mirta", address: "R. Pinheiro Machado", query: "Restaurante Vó Mirta, R. Pinheiro Machado, Caxias do Sul, RS" },
-  { name: "Arena Pio X", address: "Pio X", query: "Arena Pio X, Caxias do Sul, RS" },
-  { name: "JD Studio", address: "Bairro Rio Branco", query: "JD Studio, Rio Branco, Caxias do Sul, RS" },
-  { name: "Adré Society", address: "Bairro Santa Catarina", query: "Adré Society, Santa Catarina, Caxias do Sul, RS" },
-  { name: "Quadra Parque do Sol", address: "Bairro Santa Lucia", query: "Quadra Parque do Sol, Santa Lucia, Caxias do Sul, RS" },
-  { name: "Salão Studio Beauty", address: "R. Bento Gonçalves - Centro", query: "Salão Studio Beauty, R. Bento Gonçalves, Centro, Caxias do Sul, RS" },
-  { name: "Academia Vida Sports", address: "R. Pinheiro Machado | Bairro São Pelegrino", query: "Academia Vida Sports, Rua Pinheiro Machado, São Pelegrino, Caxias do Sul, RS" },
-  { name: "Estádio Centenário", address: "R. Thomas Beltrão de Queiroz | Mal Floriano", query: "Estádio Centenário, Rua Thomas Beltrão de Queiroz, Mal Floriano, Caxias do Sul, RS" },
-];
+interface LocationData {
+  id: string;
+  name: string;
+  address: string;
+  maps_query: string;
+}
 
-const partnerLogos = Array.from({ length: 11 }, (_, i) => ({
-  name: `Parceiro ${i + 1}`,
-  logo: `/logos-parceiros/${i + 1}.png`,
-}));
+interface LogoData {
+  id: string;
+  name: string;
+  file_path: string;
+}
 
 export default function Coverage() {
+  const [locations, setLocations] = useState<LocationData[]>([]);
+  const [partnerLogos, setPartnerLogos] = useState<{ name: string; logo: string }[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const supabase = createClient();
+      const [locsRes, logosRes] = await Promise.all([
+        supabase
+          .from("locations")
+          .select("id, name, address, maps_query")
+          .eq("active", true)
+          .order("sort_order"),
+        supabase
+          .from("partner_logos")
+          .select("id, name, file_path")
+          .eq("active", true)
+          .order("sort_order"),
+      ]);
+
+      setLocations(locsRes.data ?? []);
+      setPartnerLogos(
+        (logosRes.data ?? []).map((l) => ({
+          name: l.name,
+          logo: getPublicUrl(l.file_path),
+        }))
+      );
+    };
+    fetchData();
+  }, []);
   return (
     <section className="py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -74,7 +102,7 @@ export default function Coverage() {
                 {locations.map((loc) => (
                   <a
                     key={loc.name}
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.query)}`}
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.maps_query)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-start gap-3 bg-white/5 rounded-xl p-4 hover:bg-orange/10 transition-colors group cursor-pointer"

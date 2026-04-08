@@ -5,37 +5,56 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
-
-const partnerVideos = Array.from({ length: 9 }, (_, i) => `/anunciantes/${i + 1}.mp4`);
+import { createClient } from "@/lib/supabase/client";
+import { getPublicUrl } from "@/lib/supabase/storage";
 
 export default function ParceirosPage() {
+  const [videos, setVideos] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const goTo = useCallback((index: number) => {
-    setCurrent((index + partnerVideos.length) % partnerVideos.length);
+  useEffect(() => {
+    const fetchVideos = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("advertiser_videos")
+        .select("file_path")
+        .eq("active", true)
+        .order("sort_order");
+      if (data?.length) {
+        setVideos(data.map((v) => getPublicUrl(v.file_path)));
+      }
+    };
+    fetchVideos();
   }, []);
+
+  const goTo = useCallback((index: number) => {
+    if (videos.length === 0) return;
+    setCurrent((index + videos.length) % videos.length);
+  }, [videos.length]);
 
   const handleEnded = useCallback(() => {
     goTo(current + 1);
   }, [current, goTo]);
 
   useEffect(() => {
+    if (videos.length === 0) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => goTo(current + 1), 8000);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [current, goTo]);
+  }, [current, goTo, videos.length]);
 
   useEffect(() => {
+    if (videos.length === 0) return;
     if (videoRef.current) {
       videoRef.current.load();
       videoRef.current.play().catch(() => {});
     }
-  }, [current]);
+  }, [current, videos]);
 
   return (
     <>
@@ -70,7 +89,7 @@ export default function ParceirosPage() {
                       playsInline
                       onEnded={handleEnded}
                     >
-                      <source src={partnerVideos[current]} type="video/mp4" />
+                      <source src={videos[current]} type="video/mp4" />
                     </video>
                   </div>
 
@@ -92,7 +111,7 @@ export default function ParceirosPage() {
                     </button>
 
                     <div className="flex gap-1.5">
-                      {partnerVideos.map((_, i) => (
+                      {videos.map((_, i) => (
                         <button
                           key={i}
                           onClick={() => goTo(i)}

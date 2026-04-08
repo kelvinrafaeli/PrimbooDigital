@@ -8,6 +8,15 @@ interface CheckoutRequestBody {
   days?: number;
 }
 
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const apiKey = process.env.ASAAS_API_KEY;
 
@@ -47,16 +56,14 @@ export async function POST(request: NextRequest) {
     process.env.APP_BASE_URL?.trim() || request.nextUrl.origin;
   const checkoutRef = crypto.randomUUID();
 
-  const successBaseUrl =
-    process.env.ASAAS_SUCCESS_URL?.trim() || `${appBaseUrl}/pagamento/sucesso`;
-  const errorBaseUrl =
-    process.env.ASAAS_ERROR_URL?.trim() || `${appBaseUrl}/pagamento/erro`;
+  const successBaseUrl = process.env.ASAAS_SUCCESS_URL?.trim();
+  const errorBaseUrl = process.env.ASAAS_ERROR_URL?.trim();
 
-  const successUrl = new URL(successBaseUrl);
-  successUrl.searchParams.set("ref", checkoutRef);
-
-  const errorUrl = new URL(errorBaseUrl);
-  errorUrl.searchParams.set("ref", checkoutRef);
+  const fallbackErrorUrl =
+    isValidHttpUrl(errorBaseUrl ?? "")
+      ? new URL(errorBaseUrl as string)
+      : new URL(`${appBaseUrl}/pagamento/erro`);
+  fallbackErrorUrl.searchParams.set("ref", checkoutRef);
 
   const payload: Record<string, unknown> = {
     name: `${productTitle} - ${planName}`,
@@ -66,11 +73,16 @@ export async function POST(request: NextRequest) {
     dueDateLimitDays: 7,
     externalReference: checkoutRef,
     description: `${productTitle} | ${planName}${days > 1 ? ` | ${days} dias` : ""}`,
-    callback: {
+  };
+
+  if (isValidHttpUrl(successBaseUrl ?? "")) {
+    const successUrl = new URL(successBaseUrl as string);
+    successUrl.searchParams.set("ref", checkoutRef);
+    payload.callback = {
       successUrl: successUrl.toString(),
       autoRedirect: true,
-    },
-  };
+    };
+  }
 
   async function createPaymentLink(requestPayload: Record<string, unknown>) {
     const asaasResponse = await fetch(`${apiBaseUrl}/paymentLinks`, {
@@ -101,7 +113,13 @@ export async function POST(request: NextRequest) {
     const asaasError = asaasData?.errors?.[0]?.description ?? "";
     const mustRetryWithoutCallback =
       !asaasResponse.ok &&
-      asaasError.toLowerCase().includes("domínio configurado");
+      (
+        asaasError.toLowerCase().includes("domínio configurado") ||
+        asaasError.toLowerCase().includes("callback") ||
+        asaasError.toLowerCase().includes("url") ||
+        asaasError.toLowerCase().includes("inválida") ||
+        asaasError.toLowerCase().includes("invalida")
+      );
 
     if (mustRetryWithoutCallback) {
       const payloadWithoutCallback = { ...requestPayload };
@@ -128,7 +146,7 @@ export async function POST(request: NextRequest) {
       checkoutUrl: asaasData.url,
       paymentLinkId: asaasData.id,
       checkoutReference: checkoutRef,
-      fallbackErrorUrl: errorUrl.toString(),
+      fallbackErrorUrl: fallbackErrorUrl.toString(),
     });
   } catch {
     return NextResponse.json(

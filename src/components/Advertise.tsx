@@ -2,42 +2,56 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ArrowDown } from "lucide-react";
-
-const advertiserVideos = [
-  "/anunciantes/IMG_7880.MP4",
-  "/anunciantes/Itech (Story) (3).mp4",
-  "/anunciantes/trailer 02.mp4",
-  "/anunciantes/TV_UPTIME_CAXIAS_V2.mp4",
-].map((path) => encodeURI(path));
+import { createClient } from "@/lib/supabase/client";
+import { getPublicUrl } from "@/lib/supabase/storage";
 
 export default function Advertise() {
+  const [videos, setVideos] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const goTo = useCallback((index: number) => {
-    setCurrent((index + advertiserVideos.length) % advertiserVideos.length);
+  useEffect(() => {
+    const fetchVideos = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("advertiser_videos")
+        .select("file_path")
+        .eq("active", true)
+        .order("sort_order");
+      if (data?.length) {
+        setVideos(data.map((v) => getPublicUrl(v.file_path)));
+      }
+    };
+    fetchVideos();
   }, []);
+
+  const goTo = useCallback((index: number) => {
+    if (videos.length === 0) return;
+    setCurrent((index + videos.length) % videos.length);
+  }, [videos.length]);
 
   const handleEnded = useCallback(() => {
     goTo(current + 1);
   }, [current, goTo]);
 
   useEffect(() => {
+    if (videos.length === 0) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => goTo(current + 1), 8000);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [current, goTo]);
+  }, [current, goTo, videos.length]);
 
   useEffect(() => {
+    if (videos.length === 0) return;
     if (videoRef.current) {
       videoRef.current.load();
       videoRef.current.play().catch(() => {});
     }
-  }, [current]);
+  }, [current, videos]);
 
   return (
     <section className="py-24 gradient-dark relative overflow-hidden">
@@ -98,7 +112,7 @@ export default function Advertise() {
                   playsInline
                   onEnded={handleEnded}
                 >
-                  <source src={advertiserVideos[current]} type="video/mp4" />
+                  <source src={videos[current]} type="video/mp4" />
                 </video>
               </div>
 

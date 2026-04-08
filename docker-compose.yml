@@ -3,5 +3,7 @@ services:
     build: .
     container_name: primboo-digital
     restart: unless-stopped
+    env_file:
+      - .env.local
     ports:
       - "9191:3000"
