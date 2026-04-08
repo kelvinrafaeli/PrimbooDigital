@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const safeApiKey = apiKey;
+
   let body: CheckoutRequestBody;
 
   try {
@@ -41,33 +43,45 @@ export async function POST(request: NextRequest) {
   const apiBaseUrl =
     process.env.ASAAS_API_BASE_URL ?? "https://api-sandbox.asaas.com/v3";
   const userAgent = process.env.ASAAS_USER_AGENT ?? "primboo-digital/1.0";
+  const appBaseUrl =
+    process.env.APP_BASE_URL?.trim() || request.nextUrl.origin;
+  const checkoutRef = crypto.randomUUID();
+
+  const successBaseUrl =
+    process.env.ASAAS_SUCCESS_URL?.trim() || `${appBaseUrl}/pagamento/sucesso`;
+  const errorBaseUrl =
+    process.env.ASAAS_ERROR_URL?.trim() || `${appBaseUrl}/pagamento/erro`;
+
+  const successUrl = new URL(successBaseUrl);
+  successUrl.searchParams.set("ref", checkoutRef);
+
+  const errorUrl = new URL(errorBaseUrl);
+  errorUrl.searchParams.set("ref", checkoutRef);
 
   const payload: Record<string, unknown> = {
     name: `${productTitle} - ${planName}`,
     billingType: "UNDEFINED",
     chargeType: "DETACHED",
     value: Number(amount.toFixed(2)),
+    dueDateLimitDays: 7,
+    externalReference: checkoutRef,
     description: `${productTitle} | ${planName}${days > 1 ? ` | ${days} dias` : ""}`,
+    callback: {
+      successUrl: successUrl.toString(),
+      autoRedirect: true,
+    },
   };
 
-  const successUrl = process.env.ASAAS_SUCCESS_URL?.trim();
-  if (successUrl) {
-    payload.callback = {
-      successUrl,
-      autoRedirect: true,
-    };
-  }
-
-  try {
+  async function createPaymentLink(requestPayload: Record<string, unknown>) {
     const asaasResponse = await fetch(`${apiBaseUrl}/paymentLinks`, {
       method: "POST",
       headers: {
         accept: "application/json",
         "content-type": "application/json",
         "user-agent": userAgent,
-        access_token: apiKey,
+        access_token: safeApiKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
       cache: "no-store",
     });
 
@@ -77,10 +91,28 @@ export async function POST(request: NextRequest) {
       errors?: Array<{ description?: string }>;
     };
 
+    return { asaasResponse, asaasData };
+  }
+
+  try {
+    let requestPayload = { ...payload };
+    let { asaasResponse, asaasData } = await createPaymentLink(requestPayload);
+
+    const asaasError = asaasData?.errors?.[0]?.description ?? "";
+    const mustRetryWithoutCallback =
+      !asaasResponse.ok &&
+      asaasError.toLowerCase().includes("domínio configurado");
+
+    if (mustRetryWithoutCallback) {
+      const payloadWithoutCallback = { ...requestPayload };
+      delete payloadWithoutCallback.callback;
+      ({ asaasResponse, asaasData } = await createPaymentLink(payloadWithoutCallback));
+    }
+
     if (!asaasResponse.ok) {
-      const asaasError = asaasData?.errors?.[0]?.description;
+      const finalAsaasError = asaasData?.errors?.[0]?.description;
       return NextResponse.json(
-        { error: asaasError ?? "Falha ao criar link de pagamento no Asaas." },
+        { error: finalAsaasError ?? "Falha ao criar link de pagamento no Asaas." },
         { status: asaasResponse.status },
       );
     }
@@ -95,6 +127,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       checkoutUrl: asaasData.url,
       paymentLinkId: asaasData.id,
+      checkoutReference: checkoutRef,
+      fallbackErrorUrl: errorUrl.toString(),
     });
   } catch {
     return NextResponse.json(
