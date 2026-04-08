@@ -54,6 +54,8 @@ const products = [
           "Ideal para ativações e recepções",
         ],
         highlighted: true,
+        whatsappText:
+          "Olá, gostaria de adquirir a locação da Tela 50 polegadas para meu evento.",
       },
       {
         name: "Tela 32 polegadas",
@@ -67,6 +69,8 @@ const products = [
           "Excelente custo-benefício",
         ],
         highlighted: false,
+        whatsappText:
+          "Olá, gostaria de adquirir a locação da Tela 32 polegadas para meu evento.",
       },
     ],
     benefits: [
@@ -695,7 +699,7 @@ export default function ProdutosPage() {
                       }`}
                     >
                       <MessageCircle size={16} />
-                      Falar no WhatsApp
+                      {current.id === "locacoes-corporativas" ? "Adquirir Já" : "Falar no WhatsApp"}
                     </a>
                   ) : (
                     <button
@@ -987,7 +991,7 @@ export default function ProdutosPage() {
               <ul className="space-y-3 text-white/50 text-sm">
                 <li className="flex items-center gap-2"><MapPin size={14} className="text-orange" /> Caxias do Sul, RS</li>
                 <li className="flex items-center gap-2"><Phone size={14} className="text-orange" /> (54) 99136-6449</li>
-                <li className="flex items-center gap-2"><Mail size={14} className="text-orange" /> contato@primboodigital.com.br</li>
+                <li className="flex items-center gap-2"><Mail size={14} className="text-orange" /> contato@primboo.com.br</li>
               </ul>
             </div>
           </div>

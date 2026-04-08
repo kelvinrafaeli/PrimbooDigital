@@ -94,10 +94,10 @@ export default function Footer() {
               <li>Caxias do Sul e região</li>
               <li>
                 <a
-                  href="mailto:contato@primboodigital.com.br"
+                  href="mailto:contato@primboo.com.br"
                   className="hover:text-orange transition-colors"
                 >
-                  contato@primboodigital.com.br
+                  contato@primboo.com.br
                 </a>
               </li>
               <li>
