@@ -1,0 +1,7 @@
+services:
+  primboo:
+    build: .
+    container_name: primboo-digital
+    restart: unless-stopped
+    ports:
+      - "9191:3000"
